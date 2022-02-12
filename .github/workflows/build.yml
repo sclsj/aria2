@@ -4,63 +4,49 @@ on: push
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ubuntu-20.04, macos-10.15]
-        compiler: [gcc, clang]
+    runs-on: macos-10.15
 
     steps:
     - uses: actions/checkout@v2
-    - name: Linux setup
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get install \
-          g++-8 \
-          autoconf \
-          automake \
-          autotools-dev \
-          autopoint \
-          libtool \
-          pkg-config \
-          libssl-dev \
-          libc-ares-dev \
-          zlib1g-dev \
-          libsqlite3-dev \
-          libssh2-1-dev \
-          libcppunit-dev
     - name: MacOS setup
-      if: runner.os == 'macOS'
       run: |
-        brew install cppunit gettext openssl libssh2 c-ares sqlite3 \
+        echo 'CFLAGS="-mmacosx-version-min=10.13"' >> $GITHUB_ENV
+        export CFLAGS="-mmacosx-version-min=10.13" ; brew reinstall --build-from-source cppunit gettext openssl libssh2 c-ares sqlite3 \
           autoconf automake pkg-config libtool
     - name: Setup clang
       if: matrix.compiler == 'clang'
       run: |
         echo 'CC=clang' >> $GITHUB_ENV
         echo 'CXX=clang++' >> $GITHUB_ENV
-    - name: Setup gcc
-      if: runner.os == 'Linux' && matrix.compiler == 'gcc'
-      run: |
-        echo 'CC=gcc-8' >> $GITHUB_ENV
-        echo 'CXX=g++-8' >> $GITHUB_ENV
     - name: Libtool
       run: |
         autoreconf -i
-    - name: Configure autotools (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        ./configure \
-          CPPFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
     - name: Configure autotools (macOS)
-      if: runner.os == 'macOS'
       run: |
         ./configure \
           --without-openssl --without-gnutls --with-appletls \
           --disable-nls \
-          CPPFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+          CPPFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address" CFLAGS="-mmacosx-version-min=10.13" --prefix=/usr/local/Cellar/aria2c/1.36
     - name: Build aria2
       run: |
+        mkdir /usr/local/Cellar/aria2c/1.36
         make
         make check
+    
+    
+    - name: Pack files
+      run: |
+        cd ..
+        zip -r aria2c-source.zip aria2
+        zip -r aria2c-bin.zip /usr/local/Cellar/aria2c/1.36
+        pwd
+        ls -l
+        mv *.zip aria2/
+      
+    - name: GH Release
+      uses: softprops/action-gh-release@v0.1.13
+      with: 
+        files: |
+          aria2c-source.zip
+          aria2c-bin.zip
+        tag_name: 1.36-try1
